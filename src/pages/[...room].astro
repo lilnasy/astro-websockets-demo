@@ -1,0 +1,140 @@
+---
+import favicon from "favicon.svg"
+import { generateProjectName as generateRoomName } from "vendor/withastro/cli-kit"
+
+if (Astro.url.pathname === '/') {
+    return Response.redirect(new URL('/' + generateRoomName(), Astro.url), 303)
+}
+
+export const eventTarget = new EventTarget
+
+interface Detail {
+    message: string
+    source: WebSocket
+} 
+if (Astro.request.headers.has('Upgrade')) {
+	const { socket, response } = Astro.upgradeWebSocket(Astro.request)
+
+	const room = Astro.url.pathname
+
+	socket.addEventListener('message', event =>
+		eventTarget.dispatchEvent(new CustomEvent<Detail>(room, { detail : { message: event.data, source: socket } }))
+	)
+
+	eventTarget.addEventListener(room, (event : CustomEvent<Detail>) => {
+        if (event.detail.source === socket) return
+		try { socket.send(event.detail.message) }
+		catch {}
+	})
+
+	return response
+}
+---
+<script>
+	const inputField = document.querySelector('input')
+    const chatBox = document.querySelector('message-box') as HTMLElement
+	const websocket = new WebSocket(location.href.replace(/^http/, 'ws'))
+	
+	websocket.onopen = _ => {
+		inputField.onkeypress = event => {
+			if (event.key !== "Enter") return
+			printMessage(inputField.value, true)
+			websocket.send(inputField.value)
+			inputField.value = ''
+		}
+	}
+
+	websocket.onmessage = event => printMessage(event.data)
+	
+	websocket.onclose = _ => inputField.onkeypress = null
+
+	function printMessage(message : string, self = false) {
+		const p = document.createElement('p')
+		p.textContent = message
+		if (self) p.setAttribute('self', '')
+		chatBox.appendChild(p)
+	}
+</script>
+
+<style is:global>  
+
+	body {
+        --width : clamp( 0rem, calc( 100vw - 0.5rem ), 40rem );
+		margin  : 0;
+		display : grid;
+        min-height         : 100vh;
+        min-height         : 100svh;
+        place-items        : end center;
+        grid-template-rows : 1fr auto;
+	}
+
+    message-box {
+        display : grid;
+        width   : var(--width);
+        content-visibility     : auto;
+        contain-intrinsic-size : 0rem 8500rem;
+    }
+
+    input[type=text] {
+        --padding     : 0.75rem;
+        border-radius : 1.5rem;
+        padding       : var(--padding);
+        margin-block  : 1rem;
+        width         : calc(var(--width) - 2 * var(--padding));
+        box-sizing    : border-box;
+    }
+
+	p {
+        padding : 0.75rem;
+        margin  : 0;
+        color   : white;
+        font-family   : sans-serif;
+        margin-top    : 0.5rem;
+        word-wrap     : break-word;
+        max-width     : clamp(0rem, 70vw, 32rem);
+        border-radius : 1.5rem;
+        user-select   : none;
+        -webkit-user-select : none;
+    }
+
+    p:not([self]) {
+        background   : linear-gradient(#a44, #84a) fixed;
+        justify-self : left;
+    }
+     
+    p[self]  {
+        background   : linear-gradient(#583, #68F) fixed;
+        justify-self : right;
+    }
+
+    p:not([self]):has(+ p:not([self])) {
+        border-bottom-left-radius  : 0.5rem;
+    }
+
+    p:not([self]) + p:not([self]) {
+        margin-top                 : 0.1rem;
+        border-top-left-radius     : 0.5rem;
+    }
+
+    p[self]:has(+ p[self]) {
+        border-bottom-right-radius : 0.5rem;
+    }
+
+    p[self] + p[self] {
+        margin-top                 : 0.1rem;
+        border-top-right-radius    : 0.5rem;
+    }
+</style>
+
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width"/>
+        <meta name="format-detection" content="telephone=no"/>
+        <link rel="icon" type="image/svg+xml" href={favicon.src}/>
+	</head>
+	<body>
+        <message-box></message-box>
+		<input type="text" placeholder={`Open "${Astro.url.href}" on another device to receive messages sent here.`}/>
+	</body>
+</html>

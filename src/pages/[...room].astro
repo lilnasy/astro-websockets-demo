@@ -13,7 +13,7 @@ interface Detail {
     source: WebSocket
 } 
 if (Astro.request.headers.has('Upgrade')) {
-	const { socket, response } = Astro.upgradeWebSocket(Astro.request)
+	const { socket, response } = Astro.upgradeWebSocket()
 
 	const room = Astro.url.pathname
 
